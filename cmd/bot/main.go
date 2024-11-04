@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"github.com/ryodanqqe/telegramHello/internal/service/product"
 	"log"
 	"os"
 
@@ -16,6 +16,8 @@ func main() {
 	}
 
 	token := os.Getenv("TOKEN")
+
+	productService := product.NewService()
 
 	bot, err := tgbotapi.NewBotAPI(token)
 	if err != nil {
@@ -32,17 +34,43 @@ func main() {
 	updates := bot.GetUpdatesChan(u)
 
 	for update := range updates {
-		if update.Message != nil { // If we got a message
-			log.Printf("[%s] %s", update.Message.From.UserName, update.Message.Text)
-
-			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "You wrote: "+update.Message.Text)
-
-			returnedMsg, err := bot.Send(msg)
-			if err != nil {
-				log.Panic(err)
-			}
-
-			fmt.Printf("Message sent: %s\n", returnedMsg.Text)
+		if update.Message == nil { // If we got a message
+			continue
 		}
+
+		if update.Message.IsCommand() {
+			switch update.Message.Command() {
+			case "help":
+				helpCommand(bot, update.Message)
+				continue
+			case "list":
+				listCommand(bot, update.Message, productService)
+				continue
+			default:
+				defultBehavior(bot, update.Message)
+				continue
+			}
+		}
+
 	}
+}
+
+func helpCommand(bot *tgbotapi.BotAPI, message *tgbotapi.Message) {
+	bot.Send(tgbotapi.NewMessage(message.Chat.ID,
+		"/help - help \n"+"/list - list products"))
+}
+
+func listCommand(bot *tgbotapi.BotAPI, message *tgbotapi.Message, src *product.Service) {
+	output := ""
+
+	products := src.List()
+	for _, product := range products {
+		output += product.Title + "\n"
+	}
+
+	bot.Send(tgbotapi.NewMessage(message.Chat.ID, output))
+}
+
+func defultBehavior(bot *tgbotapi.BotAPI, message *tgbotapi.Message) {
+	bot.Send(tgbotapi.NewMessage(message.Chat.ID, "Unknown command"))
 }
